@@ -20,33 +20,43 @@ The application adheres to the **three-tier architecture** model:
 ### Components
 
 - **Microservices**: Catalog, ratings, cart, payments, shipping, user management.
+
 - **Databases**:
   - MongoDB for user data storage.
   - MySQL for product catalog and ratings.
+
 - **Redis**: Manages cart session data (In-Memory Data Store).
+
 - **RabbitMQ**: Handles order queues.
 
 ## Deployment on AWS EKS
 
 ### 1. Prerequisites
+
 ```bash
+# System Update
+sudo apt update & sudo apt install curl tar unzip
+
 # Install AWS CLI
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip awscliv2.zip
 sudo ./aws/install
+aws --version
+aws configure
 
 # Install kubectl
 curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+chmod +x kubectl
+sudo mv kubectl /usr/local/bin/
+kubectl version --client
 
 # Install eksctl
 curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
 sudo mv /tmp/eksctl /usr/local/bin
+eksctl version
 
 # Install Helm
-curl https://baltocdn.com/helm/signing.asc | sudo apt-key add -
-sudo apt-add-repository "deb https://baltocdn.com/helm/stable/debian/ all main"
-sudo apt update && sudo apt install -y helm
+curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 helm version
 ```
 
@@ -103,7 +113,7 @@ eksctl create iamserviceaccount \
     --namespace=kube-system \
     --name=aws-load-balancer-controller \
     --role-name AmazonEKSLoadBalancerControllerRole \
-    --attach-policy-arn=arn:aws:iam::$ACCOUNT_ID:policy/    AWSLoadBalancerControllerIAMPolicy \
+    --attach-policy-arn=arn:aws:iam::$ACCOUNT_ID:policy/AWSLoadBalancerControllerIAMPolicy \
     --approve
 
 # Deploy ALB controller via Helm
@@ -123,8 +133,9 @@ kubectl get deployment -n kube-system aws-load-balancer-controller
 
 # Create an Ingress Resource: Use Kubernetes Ingress to expose the application via the ALB.
 ```
+
 ```bash
-# You might face the issue, unable to see the loadbalancer address while giving k get ing -n robot-shop at the end. To avoid this your **AWSLoadBalancerControllerIAMPolicy** should have the required permissions for elasticloadbalancing:DescribeListenerAttributes.
+# You might face the issue, unable to see the loadbalancer address while giving `kubectl ing -n robot-shop` at the end. To avoid this your **AWSLoadBalancerControllerIAMPolicy** should have the required permissions for elasticloadbalancing:DescribeListenerAttributes.
 
 # Run the following command to retrieve the policy details and look for **elasticloadbalancing:DescribeListenerAttributes** in the policy document.
 aws iam get-policy-version \
@@ -181,13 +192,14 @@ eksctl create iamserviceaccount \
 #     --attach-policy-arn arn:aws:iam::<AWS_ACCOUNT_ID>:policy/AmazonEKS_EBS_CSI_Driver_Policy \
 #     --approve
 ```
+
 ```bash
 # Add EBS CSI add-on
 # This command is used to add the AWS EBS CSI driver as a managed EKS add-on. It leverages Amazon EKS's built-in integration with the CSI driver and is simpler to manage because EKS handles updates and configurations for the add-on.
 eksctl create addon \
     --name aws-ebs-csi-driver \
     --cluster $CLUSTER_NAME \
-    --service-account-role-arn arn:aws:iam::$ACCOUNT_ID:role/   AmazonEKS_EBS_CSI_DriverRole \
+    --service-account-role-arn arn:aws:iam::$ACCOUNT_ID:role/AmazonEKS_EBS_CSI_DriverRole \
     --force
 
 # Install EBS CSI driver using helm
@@ -260,16 +272,4 @@ eksctl delete cluster --name $CLUSTER_NAME --region us-west-1
     - Check PVC/PV binding status
     - Review storage class configuration
 
-## Best Practices
 
-- **Separate Microservices**: Use individual Helm charts for each microservice in production environments.
-- **Secure Resource Access**: Assign unique IAM roles for microservices needing AWS access.
-- **Monitoring and Logging**: Implement tools like Prometheus and Grafana.
-- **CI/CD Pipelines**: Automate deployments using CI/CD pipelines for each microservice.
-
-## References
-
-- [AWS EKS Documentation](https://docs.aws.amazon.com/eks/)
-- [Kubernetes Helm Charts](https://helm.sh/docs/)
-- [Redis on Kubernetes](https://redis.io/docs/getting-started/)
-- [ALB Ingress Controller](https://kubernetes-sigs.github.io/aws-load-balancer-controller/)
